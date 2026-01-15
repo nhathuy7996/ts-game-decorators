@@ -49,8 +49,8 @@ export function OnError(): MethodDecorator {
     };
 }
 
-export function registerSocketServices(io: Server, ...serviceClasses: any[]) {
-    // Import middleware xác thực socket
+export function registerSocketServices(io: Server, serviceClasses: any[], authSocketMiddleware?: (socket: any, next: (err?: Error) => void) => void) {
+    // Import internal middleware as fallback
     const { authSocketToken } = require('../middleware/auth');
     io.on('connection', (socket: Socket) => {
         serviceClasses.forEach(ServiceClass => {
@@ -74,7 +74,8 @@ export function registerSocketServices(io: Server, ...serviceClasses: any[]) {
                 if (evt.type === 'event') {
                     socket.on(evt.event, (...args: any[]) => {
                         if (needAuth) {
-                            authSocketToken(socket, (err?: Error) => {
+                            const authFn = authSocketMiddleware || authSocketToken;
+                            authFn(socket, (err?: Error) => {
                                 if (err) return socket.emit('server:error', err.message);
                                 handler(...args);
                             });

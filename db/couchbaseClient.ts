@@ -1,31 +1,32 @@
 import couchbase, { Cluster, Bucket, Collection, DocumentNotFoundError } from 'couchbase'; 
-import dotenv from "dotenv"; 
+import dotenv from "dotenv";  
 
 dotenv.config();
 
 let cluster: Cluster;
 let bucket: Bucket;
 
-let dataCollection: Collection; 
+let dataCollection: Map<string,Collection>; 
 
-export async function connectToCouchbase() {
+export async function connectToCouchbase(): Promise<Bucket> {
     try {
         // Kết nối với Couchbase Cluster
-        cluster = await Cluster.connect(`couchbase://${process.env.COUCHBASE_URL || '165.22.240.52'}`, {
-            username: process.env.COUCHBASE_USERNAME || 'nhat.huy.7996@gmail.com',
-            password: process.env.COUCHBASE_PASSWORD || 'oc3qKtHXELXL',
+        cluster = await Cluster.connect(`couchbase://${process.env.COUCHBASE_URL || 'localhost'}`, {
+            username: process.env.COUCHBASE_USERNAME || 'admin',
+            password: process.env.COUCHBASE_PASSWORD || 'password',
         });
     
         // Lấy bucket từ cluster
-        bucket = cluster.bucket(process.env.COUCHBASE_BUCKET || 'buildAnArmy');
+        bucket = cluster.bucket(process.env.COUCHBASE_BUCKET || 'gamedevtoi');
 
         //Get collection 
-        dataCollection = bucket.collection('users'); 
-        
-        
+        dataCollection = new Map();
         console.log('✅ Connected to Couchbase');
+
+        return bucket;
       } catch (err) {
         console.error('❌ Failed to connect to Couchbase:', err);
+        return Promise.reject(err);
       } 
 }
 
@@ -44,9 +45,16 @@ export async function queryData(query: string){
       }
 }
 
-export function getCouchbaseUsersCollection(): Collection {
+export function getCollection(name: string): Collection {
   if (!dataCollection) {
     throw new Error('Couchbase is not connected. Call connectToCouchbase first.');
   }
-  return dataCollection;
+  let collection = dataCollection.get(name);
+  if (!collection) {
+    collection = bucket.collection(name);
+    dataCollection.set(name, collection);
+    return collection;
+  }
+
+  return collection;
 }

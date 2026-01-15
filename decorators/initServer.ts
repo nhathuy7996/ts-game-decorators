@@ -9,6 +9,7 @@ export interface InitOptions {
     apiControllers?: any[];
     socketServices?: any[];
     authAPIMiddleware?: any;
+    authSocketMiddleware?: (socket: any, next: (err?: Error) => void) => void; // Optional socket auth middleware
     onReady?: (app: Express, io: SocketIOServer, httpServer: HTTPServer) => void;
     publicPath?: string;
     expressConfig?: (app: Express) => void;
@@ -55,6 +56,12 @@ export async function initServer(options: InitOptions) {
         }
     }
 
+    // Socket auth middleware (optional)
+    if (options.authSocketMiddleware) {
+        io.use(options.authSocketMiddleware);
+        console.log('🔐 Socket auth middleware configured');
+    }
+
     // Express config
     app.use(express.json());
     app.use((req: Request, res: Response, next: NextFunction) => {
@@ -78,7 +85,7 @@ export async function initServer(options: InitOptions) {
 
     // Register socket services
     if (options.socketServices && options.socketServices.length > 0) {
-        registerSocketServices(io, ...options.socketServices);
+        registerSocketServices(io, options.socketServices, options.authSocketMiddleware);
     }
     if (options.socketConfig) {
         options.socketConfig(io);
