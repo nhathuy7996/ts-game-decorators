@@ -5,6 +5,7 @@ A TypeScript library for auto-routing Express APIs and Socket.IO events using de
 ## Features
 - Decorators for Express route/controller (@RouterController, @Get, @Post, @Authen)
 - Decorators for Socket.IO event handler (@SocketService, @OnEvent, @OnDisconnect, @OnError, @AuthenSocket)
+- Business Exception Handling with automatic error response formatting
 - Unified `initServer` function to bootstrap Express + Socket.IO + Redis adapter
   - Supports `authAPIMiddleware` for Express and `authSocketMiddleware` for Socket.IO (can be used globally or for method-level `@AuthenSocket`)
 - TypeScript-first, auto .d.ts
@@ -75,7 +76,65 @@ export class GameSocketService {
 }
 ```
 
-### 3. Bootstrap Server
+### 3. Business Exception Handling
+
+The library includes a built-in business exception system that automatically handles errors and formats responses.
+
+#### Features
+- Define enum-like business exceptions (similar to Java enums)
+- Automatic error response formatting: `{ success: false, message: string, code: number }`
+- Automatic HTTP status code mapping
+- Type-safe exception definitions
+- Works with all routes (authenticated and public)
+
+#### Creating Business Exceptions
+
+```ts
+import { createBusinessMessage } from 'ts-game-decorators';
+
+export const ShopBusinessMessage = createBusinessMessage({
+  ITEM_NOT_FOUND: [11005, "Item not found in shop config", 404],
+  INVALID_REQUEST: [11001, "Invalid request", 400],
+  CURRENCY_NOT_ENOUGH: [11007, "Currency not enough", 400],
+  INTERNAL_ERROR: [11000, "Internal server error", 500],
+});
+```
+
+#### Throwing Business Exceptions
+
+```ts
+import { BusinessException } from 'ts-game-decorators';
+import { ShopBusinessMessage } from './exceptions/shopException';
+
+@RouterController('/api/shop')
+export class ShopAPI {
+  @Get('/:itemId')
+  async getItem(req, res) {
+    const item = await findItem(req.params.itemId);
+    
+    if (!item) {
+      throw new BusinessException(ShopBusinessMessage.ITEM_NOT_FOUND);
+    }
+    
+    res.json({ success: true, data: item });
+  }
+}
+```
+
+#### Automatic Response Example
+
+When throwing `BusinessException(ShopBusinessMessage.ITEM_NOT_FOUND)`:
+
+**Response (HTTP 404):**
+```json
+{
+  "success": false,
+  "message": "Item not found in shop config",
+  "code": 11005
+}
+```
+
+### 4. Bootstrap Server
 
 ```ts
 export interface InitOptions {
@@ -117,7 +176,7 @@ initServer({
 });
 ```
 
-### 4. Create token
+### 5. Create token
 
 ```ts
 import {utils} from "ts-game-decorators";
@@ -126,7 +185,7 @@ let token = utils.tokenEncode({"userId":123});
 
 data pass to tokenEncode must have userId for authen purpose!
 
-### 5. using couchbase DB
+### 6. using couchbase DB
 
 ```ts
 import { connectToCouchbase, getCollection, queryData } from "ts-game-decorators";
@@ -158,7 +217,7 @@ async function exampleDB(){
 }
 ```
 
-### 6. .env config
+### 7. .env config
 
 ```
 HTTP_PORT=3000
