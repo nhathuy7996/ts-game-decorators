@@ -133,7 +133,7 @@ import { connectToCouchbase, getCollection, queryData } from "ts-game-decorators
 
 async function exampleDB(){
   await connectToCouchbase;
-  const userCollection = getCollection('users');
+  const userCollection = getCollection('users'); // optional scopeName
 
     //update
     userCollection.upsert('user::12345', { name: 'John Doe', score: 1000 })

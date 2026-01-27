@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 declare const Reflect: any;
 import { Express, Request, Response, NextFunction, Router } from 'express';
+import { BusinessException } from '../exceptions/businessException';
 
 const ROUTER_META = Symbol('router');
 const ROUTES_META = Symbol('routes');
@@ -55,8 +56,26 @@ export function registerRoutes(app: Express, authMiddleware: any, ...controllers
         const instance = new Controller();
         const router = Router();
         routes.forEach((route: any) => {
-            const handler = (req: Request, res: Response, next: NextFunction) => {
-                Promise.resolve(instance[route.handler](req, res, next)).catch(next);
+            const handler = async (req: Request, res: Response, next: NextFunction) => {
+                try {
+                    await instance[route.handler](req, res, next);
+                } catch (error) {
+                    // Handle BusinessException automatically
+                    if (error instanceof BusinessException) {
+                        const responsePayload: any = {
+                            success: false,
+                            message: error.message
+                        };
+                        
+                        if (error.code !== undefined) {
+                            responsePayload.code = error.code;
+                        }
+                        
+                        return res.status(error.statusCode).json(responsePayload);
+                    }
+                    // Pass other errors to Express error handler
+                    next(error);
+                }
             };
             const methodAuthen = methodAuthenArr.includes(route.handler);
             const routeMethod = route.method as 'get' | 'post' | 'put' | 'delete';

@@ -45,13 +45,13 @@ export async function queryData(query: string){
       }
 }
 
-export function getCollection(name: string): Collection {
+export function getCollection(name: string, scopeName: string = '_default'): Collection {
   if (!dataCollection) {
     throw new Error('Couchbase is not connected. Call connectToCouchbase first.');
   }
   let collection = dataCollection.get(name);
   if (!collection) {
-    collection = bucket.collection(name);
+    collection = bucket.scope(scopeName).collection(name);
     dataCollection.set(name, collection);
     return collection;
   }
