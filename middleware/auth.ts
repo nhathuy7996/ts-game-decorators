@@ -28,7 +28,7 @@ export const authAPIToken = (req: AuthenticatedRequest, res: Response, next: Nex
     try {
         const decoded = utils.tokenDecode(token);
         req.userId = decoded.userId;
-        console.log('✅ API authenticated successfully for walletId:', decoded.walletId);
+        console.log('✅ API authenticated successfully for userId:', decoded.userId);
         next();
     } catch (error) {
         console.error(error);
