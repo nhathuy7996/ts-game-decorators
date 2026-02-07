@@ -1,4 +1,4 @@
-import couchbase, { Cluster, Bucket, Collection, DocumentNotFoundError } from 'couchbase'; 
+import couchbase, { Cluster, Bucket, Collection, DocumentNotFoundError, Scope } from 'couchbase'; 
 import dotenv from "dotenv";  
 
 dotenv.config();
@@ -7,6 +7,7 @@ let cluster: Cluster;
 let bucket: Bucket;
 
 let dataCollection: Map<string,Collection>; 
+let scopes: Map<string,Scope>;
 
 export async function connectToCouchbase(): Promise<Bucket> {
     try {
@@ -57,4 +58,18 @@ export function getCollection(name: string, scopeName: string = '_default'): Col
   }
 
   return collection;
+}
+
+export function getScope(name: string): Scope {
+  if (!scopes) {
+    scopes = new Map();
+  }
+  let scope = scopes.get(name);
+  if (!scope) {
+    scope = bucket.scope(name);
+    if(!scope) throw new Error('Scope not found');
+    scopes.set(name, scope);
+    return scope;
+  }
+  return scope;
 }

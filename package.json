@@ -1,6 +1,6 @@
 {
   "name": "ts-game-decorators",
-  "version": "1.0.20",
+  "version": "1.0.24",
   "description": "Express & Socket.IO decorators for auto routing and event handling. using for backend game development.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

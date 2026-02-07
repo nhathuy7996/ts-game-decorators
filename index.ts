@@ -1,3 +1,4 @@
+
 // Decorators
 export * from './decorators/autoRouter';
 export * from './decorators/socketDecorators';
@@ -25,5 +26,9 @@ export * from './types/index'
 //modules
 export { Request, Response, NextFunction, Express, Router } from 'express';
 export { Server } from 'socket.io';
+
+export {Collection, Scope} from 'couchbase';
+
+export * from './exceptions/businessException';
 
 

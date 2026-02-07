@@ -52,16 +52,21 @@ export function OnError(): MethodDecorator {
 export function registerSocketServices(io: Server, serviceClasses: any[], authSocketMiddleware?: (socket: any, next: (err?: Error) => void) => void) {
     // Import internal middleware as fallback
     const { authSocketToken } = require('../middleware/auth');
+    
+    // Create singleton instances ONCE for all connections
+    const serviceInstances = serviceClasses.map(ServiceClass => {
+        if (!Reflect.getMetadata(SOCKET_SERVICE_META, ServiceClass)) return null;
+        // Nếu class nhận io ở constructor thì truyền vào
+        try {
+            return new ServiceClass(io);
+        } catch {
+            return new ServiceClass();
+        }
+    }).filter(Boolean); // Remove null values
+    
     io.on('connection', (socket: Socket) => {
-        serviceClasses.forEach(ServiceClass => {
-            if (!Reflect.getMetadata(SOCKET_SERVICE_META, ServiceClass)) return;
-            // Nếu class nhận io ở constructor thì truyền vào
-            let instance;
-            try {
-                instance = new ServiceClass(io);
-            } catch {
-                instance = new ServiceClass();
-            }
+        serviceInstances.forEach((instance: any) => {
+            const ServiceClass = instance.constructor;
             const events = Reflect.getMetadata(SOCKET_EVENTS_META, ServiceClass) || [];
             const classAuthen = Reflect.getMetadata(SOCKET_AUTHEN_META, ServiceClass);
             const methodAuthenArr = Reflect.getMetadata(SOCKET_AUTHEN_META, ServiceClass) || [];
