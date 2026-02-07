@@ -30,5 +30,6 @@ export { Server } from 'socket.io';
 export {Collection, Scope} from 'couchbase';
 
 export * from './exceptions/businessException';
+export * from 'couchbase';
 
 
