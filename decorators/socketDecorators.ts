@@ -33,6 +33,14 @@ export function OnEvent(event: string): MethodDecorator {
     };
 }
 
+export function OnConnect(): MethodDecorator {
+    return (target, propertyKey, descriptor) => {
+        const events = Reflect.getMetadata(SOCKET_EVENTS_META, target.constructor) || [];
+        events.push({ type: 'connect', handler: propertyKey });
+        Reflect.defineMetadata(SOCKET_EVENTS_META, events, target.constructor);
+    };
+}
+
 export function OnDisconnect(): MethodDecorator {
     return (target, propertyKey, descriptor) => {
         const events = Reflect.getMetadata(SOCKET_EVENTS_META, target.constructor) || [];
@@ -88,6 +96,17 @@ export function registerSocketServices(io: Server, serviceClasses: any[], authSo
                             handler(...args);
                         }
                     });
+                } else if (evt.type === 'connect') {
+                    // Gọi ngay khi client connect vào, nhưng chạy auth trước nếu cần
+                    if (needAuth) {
+                        const authFn = authSocketMiddleware || authSocketToken;
+                        authFn(socket, (err?: Error) => {
+                            if (err) return socket.emit('server:error', err.message);
+                            Promise.resolve(instance[evt.handler](socket)).catch(console.error);
+                        });
+                    } else {
+                        Promise.resolve(instance[evt.handler](socket)).catch(console.error);
+                    }
                 } else if (evt.type === 'disconnect') {
                     socket.on('disconnect', (...args: any[]) => handler(...args));
                 } else if (evt.type === 'error') {
