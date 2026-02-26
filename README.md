@@ -387,5 +387,83 @@ The following are defaults baked into the library. No `.env` changes needed unle
 | `HEARTBEAT_INTERVAL` | 10s             | How often each server sends a heartbeat                  |
 | `SERVER_ID`          | `hostname-PID`  | Unique identifier for this instance                      |
 
+---
+
+## Troubleshooting
+
+### Redis `ConnectionTimeoutError` when running multiple server instances
+
+**Symptom:** Server 1 runs fine. When Server 2 starts, Server 1 logs repeated errors:
+
+```
+❌ Redis Subscriber Error: ConnectionTimeoutError: Connection timeout
+❌ Redis Publisher Error: ConnectionTimeoutError: Connection timeout
+```
+
+Server 1 recovers only after Server 2 is stopped.
+
+**Root cause: NAT/Firewall idle connection timeout**
+
+When Redis and game servers are on separate machines, TCP connections pass through a firewall or NAT that tracks active connections. If a connection is **idle** (no traffic) longer than the firewall's idle timeout (typically 60–350s depending on cloud provider), the firewall silently drops its tracking entry. When Server 2 starts and generates traffic, Server 1's idle connections get displaced or expire — causing the timeout.
+
+```
+Server 1 → idle for >60s → Firewall drops tracking entry
+Server 2 starts → flood of new packets
+Server 1 sends packet → Firewall has no entry → packet dropped → ConnectionTimeoutError
+```
+
+**Cloud firewall idle timeouts (reference):**
+
+| Provider              | Default idle timeout |
+|-----------------------|----------------------|
+| AWS Security Group    | No idle timeout ✅   |
+| AWS NAT Gateway       | 350s                 |
+| GCP Firewall          | 120s ⚠️              |
+| DigitalOcean          | 60–120s ⚠️           |
+| Self-hosted (iptables)| Depends on config    |
+
+**Fix 1 — Redis server (run once):**
+
+```bash
+# Reduce Redis TCP keepalive from 300s to 60s
+# Redis will send TCP probe every 60s → firewall entry stays alive
+redis-cli CONFIG SET tcp-keepalive 60
+
+# Ensure Redis never closes idle connections
+redis-cli CONFIG SET timeout 0
+
+# Save permanently
+redis-cli CONFIG REWRITE
+```
+
+**Fix 2 — Client code (already configured in this library):**
+
+The `createRedisAdapter` function is already configured with:
+
+```ts
+socket: {
+    // Retry indefinitely — client is NEVER permanently destroyed
+    reconnectStrategy: (retries) => Math.min(retries * 200, 10_000),
+
+    // Connection establishment timeout
+    connectTimeout: 10_000,
+
+    // Client sends TCP keepalive probe every 15s
+    // Must be lower than the shortest firewall idle timeout in your infra
+    keepAlive: 15_000,
+}
+```
+
+> ⚠️ Do NOT use `return new Error(...)` in `reconnectStrategy` — it permanently destroys the Redis client and prevents all future reconnections.
+
+**Checklist to verify:**
+
+```bash
+redis-cli CONFIG GET timeout        # should be "0"
+redis-cli CONFIG GET tcp-keepalive  # should be "60" (not 300)
+redis-cli CONFIG GET maxclients     # should be well above total connections
+redis-cli INFO clients              # check connected_clients vs maxclients
+```
+
 ## License
 MIT

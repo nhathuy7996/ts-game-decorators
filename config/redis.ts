@@ -22,14 +22,19 @@ export const createRedisAdapter = async () => {
         const redisConfig: any = {
             url: REDIS_URL,
             socket: {
+                // Retry vô hạn với exponential backoff, tối đa 10 giây giữa các lần
+                // KHÔNG return Error() → client KHÔNG bao giờ bị destroy vĩnh viễn
                 reconnectStrategy: (retries: number) => {
-                    if (retries > 10) {
-                        console.error('❌ Redis: Too many retries, giving up');
-                        return new Error('Too many retries');
-                    }
-                    console.log(`🔄 Redis: Retrying connection (${retries}/10)`);
-                    return Math.min(retries * 100, 3000);
-                }
+                    const delay = Math.min(retries * 200, 10_000);
+                    console.log(`🔄 Redis: Retrying connection (attempt ${retries}, next in ${delay}ms)`);
+                    return delay;
+                },
+                // Timeout khi thiết lập kết nối ban đầu
+                connectTimeout: 10_000,
+                // TCP keepAlive: gửi probe packet mỗi 15 giây để giữ connection
+                // sống qua NAT/firewall (AWS, GCP, ... drop idle TCP sau ~30-350s)
+                // Phải nhỏ hơn idle timeout của firewall thấp nhất trong hệ thống
+                keepAlive: 15_000,
             }
         };
 
