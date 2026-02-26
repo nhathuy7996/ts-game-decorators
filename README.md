@@ -220,6 +220,7 @@ async function exampleDB(){
 ### 7. .env config
 
 ```
+SERVER_ID="prefix-1"
 HTTP_PORT=3000
 
 DISCORD_TOKEN=""
@@ -239,6 +240,152 @@ REDIS_URL=""
 REDIS_USERNAME=""
 REDIS_PASSWORD="" 
 ```
+
+### 8. Server Registry (Multi-instance Tracking)
+
+Built-in server registry to track active server instances in a multi-server deployment using Redis Heartbeat.
+
+#### How it works
+
+Each server instance periodically writes a heartbeat to a shared Redis Hash (`server:registry`). Results are cached in memory and refreshed automatically every heartbeat cycle — so game loops can query server state at **zero Redis cost**.
+
+```
+[Server 1] ──heartbeat──▶ Redis (server:registry)
+[Server 2] ──heartbeat──▶ Redis (server:registry)
+
+Memory cache (auto-refreshed every 10s):
+  { count: 2, myIndex: 0, servers: [...] }
+```
+
+#### Setup
+
+Call `startServerRegistry()` after Redis is connected, and `stopServerRegistry()` on shutdown:
+
+```ts
+import { createRedisAdapter, startServerRegistry, stopServerRegistry } from 'ts-game-decorators';
+
+initServer({
+  port: 3000,
+  createRedisAdapter,
+  onReady: async () => {
+    await startServerRegistry();
+    console.log('Server registry started!');
+  },
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  await stopServerRegistry();
+});
+```
+
+#### Reading server info in a game loop (Zero Redis cost)
+
+Use the `getCached*` functions inside high-frequency loops (e.g. 60 FPS update). These read from in-memory cache only — **no Redis calls**.
+
+```ts
+import { getCachedServerCount, getCachedServerIndex, getCachedActiveServers } from 'ts-game-decorators';
+
+class GameController {
+  update(deltaTime: number) {
+    // ⚡ ZERO COST — reads from memory, never touches Redis
+    const total   = getCachedServerCount();    // e.g. 3
+    const myIndex = getCachedServerIndex();    // e.g. 1  (0-based, sorted by serverId)
+
+    // Example: partition world zones across servers
+    // Server 0 → zone 0, Server 1 → zone 1, ...
+    const myZone = myIndex;
+  }
+}
+```
+
+|         Function           | Redis calls |      Use case        |
+|----------------------------|-------------|----------------------|
+| `getCachedServerCount()`   | **0**       | game loop, anywhere  |
+| `getCachedServerIndex()`   | **0**       | game loop, anywhere  |
+| `getCachedActiveServers()` | **0**       | game loop, anywhere  |
+| `getActiveServerCount()`   | 2           | admin API, monitoring|
+| `getActiveServers()`       | 2           | admin API, monitoring|
+
+#### Querying real-time data (e.g. admin API)
+
+```ts
+import { getActiveServers, getActiveServerCount } from 'ts-game-decorators';
+
+// Force-refresh cache then return result
+const count   = await getActiveServerCount();
+const servers = await getActiveServers();
+
+// Each ServerInfo contains:
+// { serverId, hostname, pid, startedAt, lastHeartbeat }
+```
+
+#### Identifying server instances
+
+Each instance gets a unique `SERVER_ID` automatically. Override via environment variable for explicit naming (e.g. in Docker/PM2):
+
+```sh
+# Automatic (default): "hostname-PID"
+node dist/index.js
+
+# Explicit (recommended for production):
+SERVER_ID=pokemon-server-1 node dist/index.js
+SERVER_ID=pokemon-server-2 node dist/index.js
+```
+
+```ts
+import { SERVER_ID } from 'ts-game-decorators';
+console.log(`Running as: ${SERVER_ID}`);
+```
+
+#### SERVER_ID & cache index stability
+
+`getCachedServerIndex()` returns the position of the current server in a **sorted list** of all active servers. The sort uses **natural order** (numeric suffix aware), so `server-2 < server-10` works correctly.
+
+| `SERVER_ID` mode              | Index stable across restarts? | Reason                                              |
+|-------------------------------|-------------------------------|-----------------------------------------------------|
+| Auto `hostname-PID`           | ❌ No                         | PID changes every restart → different sort order    |
+| Manual `server-1`, `server-2` | ✅ Yes                        | Fixed string → always same sort position            |
+
+How natural sort works:
+
+```
+SERVER_ID           naturalKey()              sort index
+─────────────────────────────────────────────────────────
+pokemon-server-1  → ["pokemon-server-", 1]  →  0
+pokemon-server-2  → ["pokemon-server-", 2]  →  1
+pokemon-server-10 → ["pokemon-server-", 10] →  2  ✅ correct
+```
+
+> ⚠️ Without natural sort, lexicographic order would give `server-10` index 1 and `server-2` index 2 — which is wrong.
+
+**Recommended naming convention for production:**
+
+```sh
+# ✅ Good — same prefix, number at the end
+SERVER_ID=pokemon-server-1
+SERVER_ID=pokemon-server-2
+SERVER_ID=pokemon-server-10
+
+# ✅ Also fine — different prefixes sort alphabetically first
+SERVER_ID=asia-server-1
+SERVER_ID=eu-server-1
+
+# ⚠️ Avoid — no numeric suffix, index order is harder to predict
+SERVER_ID=main-server
+SERVER_ID=backup-server
+```
+
+
+#### .env config for heartbeat tuning
+
+The following are defaults baked into the library. No `.env` changes needed unless you want to override them in future releases:
+
+| Setting              | Default         |                 Description                              |
+|----------------------|-----------------|----------------------------------------------------------|
+| `HEARTBEAT_TTL`      | 30s             | Time before a silent server is declared dead             |
+| `HEARTBEAT_INTERVAL` | 10s             | How often each server sends a heartbeat                  |
+| `SERVER_ID`          | `hostname-PID`  | Unique identifier for this instance                      |
 
 ## License
 MIT

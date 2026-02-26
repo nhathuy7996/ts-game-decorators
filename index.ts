@@ -13,6 +13,7 @@ export * from './db/lowdbClient';
 
 // Redis
 export * from './config/redis';
+export * from './config/serverRegistry';
 
 // Utils
 export * from './utils/collisionDetector';
