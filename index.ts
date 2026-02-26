@@ -32,5 +32,6 @@ export {Collection, Scope} from 'couchbase';
 
 export * from './exceptions/businessException';
 export * from 'couchbase';
+export * from './utils/logger';
 
 
