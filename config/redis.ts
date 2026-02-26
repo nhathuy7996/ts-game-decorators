@@ -1,6 +1,7 @@
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import dotenv from "dotenv"; 
+import { startServerRegistry } from './serverRegistry';
 
 dotenv.config();
 
@@ -14,7 +15,7 @@ let pubClient: any = null;
 let subClient: any = null;
 let redisAdapter: any = null;
 
-export const createRedisAdapter = async () => {
+export const createRedisAdapter = async (onReady?: (pubClient: any, subClient: any) => void | Promise<void>) => {
     try {
         console.log('🔗 Connecting to Redis...');
         
@@ -90,6 +91,13 @@ export const createRedisAdapter = async () => {
         });
 
         console.log('✅ Redis adapter created successfully');
+        startServerRegistry();
+
+        // Gọi callback sau khi adapter sẵn sàng (nếu có)
+        if (onReady) {
+            await onReady(pubClient, subClient);
+        }
+
         return redisAdapter;
 
     } catch (error) {
@@ -97,6 +105,7 @@ export const createRedisAdapter = async () => {
         throw error;
     }
 };
+
 
 // Function to get Redis adapter instance
 export const getRedisAdapter = () => {
