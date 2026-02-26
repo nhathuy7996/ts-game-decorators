@@ -2,9 +2,11 @@ import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import dotenv from "dotenv"; 
 import { startServerRegistry } from './serverRegistry';
+import { createLogger } from '../utils/logger';
 
 dotenv.config();
 
+const log = createLogger('Redis');
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const REDIS_USERNAME = process.env.REDIS_USERNAME;
@@ -17,7 +19,7 @@ let redisAdapter: any = null;
 
 export const createRedisAdapter = async (onReady?: (pubClient: any, subClient: any) => void | Promise<void>) => {
     try {
-        console.log('🔗 Connecting to Redis...');
+        log.info('🔗 Connecting to Redis...');
         
         // Build Redis client configuration
         const redisConfig: any = {
@@ -27,7 +29,7 @@ export const createRedisAdapter = async (onReady?: (pubClient: any, subClient: a
                 // KHÔNG return Error() → client KHÔNG bao giờ bị destroy vĩnh viễn
                 reconnectStrategy: (retries: number) => {
                     const delay = Math.min(retries * 200, 10_000);
-                    console.log(`🔄 Redis: Retrying connection (attempt ${retries}, next in ${delay}ms)`);
+                    log.warn(`🔄 Retrying connection (attempt ${retries}, next in ${delay}ms)`);
                     return delay;
                 },
                 // Timeout khi thiết lập kết nối ban đầu
@@ -47,7 +49,7 @@ export const createRedisAdapter = async (onReady?: (pubClient: any, subClient: a
             redisConfig.password = REDIS_PASSWORD;
         }
 
-        console.log(`🔗 Redis config: ${REDIS_URL} ${REDIS_USERNAME ? `(username: ${REDIS_USERNAME})` : ''} ${REDIS_PASSWORD ? '(password: ***)' : '(no auth)'}`);
+        log.info(`🔗 Redis config: ${REDIS_URL} ${REDIS_USERNAME ? `(username: ${REDIS_USERNAME})` : ''} ${REDIS_PASSWORD ? '(password: ***)' : '(no auth)'}`);
         
         // Create publisher client
         pubClient = createClient(redisConfig);
@@ -57,28 +59,28 @@ export const createRedisAdapter = async (onReady?: (pubClient: any, subClient: a
 
         // Error handling for publisher
         pubClient.on('error', (err: Error) => {
-            console.error('❌ Redis Publisher Error:', err);
+            log.error('❌ Publisher Error:', err.message);
         });
 
         pubClient.on('connect', () => {
-            console.log('✅ Redis Publisher connected');
+            log.info('✅ Publisher connected');
         });
 
         pubClient.on('reconnecting', () => {
-            console.log('🔄 Redis Publisher reconnecting...');
+            log.warn('🔄 Publisher reconnecting...');
         });
 
         // Error handling for subscriber
         subClient.on('error', (err: Error) => {
-            console.error('❌ Redis Subscriber Error:', err);
+            log.error('❌ Subscriber Error:', err.message);
         });
 
         subClient.on('connect', () => {
-            console.log('✅ Redis Subscriber connected');
+            log.info('✅ Subscriber connected');
         });
 
         subClient.on('reconnecting', () => {
-            console.log('🔄 Redis Subscriber reconnecting...');
+            log.warn('🔄 Subscriber reconnecting...');
         });
 
         // Connect both clients
@@ -90,7 +92,7 @@ export const createRedisAdapter = async (onReady?: (pubClient: any, subClient: a
             requestsTimeout: 5000
         });
 
-        console.log('✅ Redis adapter created successfully');
+        log.info('✅ Redis adapter created successfully');
         startServerRegistry();
 
         // Gọi callback sau khi adapter sẵn sàng (nếu có)
@@ -101,7 +103,7 @@ export const createRedisAdapter = async (onReady?: (pubClient: any, subClient: a
         return redisAdapter;
 
     } catch (error) {
-        console.error('❌ Failed to create Redis adapter:', error);
+        log.error('❌ Failed to create Redis adapter:', error);
         throw error;
     }
 };
@@ -120,30 +122,30 @@ export const getRedisClients = () => {
 // Graceful shutdown for Redis connections
 export const closeRedisConnections = async () => {
     try {
-        console.log('🛑 Closing Redis connections...');
+        log.info('🛑 Closing Redis connections...');
         
         if (pubClient && pubClient.isOpen) {
             try {
                 await pubClient.quit();
-                console.log('✅ Redis Publisher connection closed');
+                log.info('✅ Publisher connection closed');
             } catch (error) {
-                console.error('❌ Error closing Redis Publisher connection:', error);
+                log.error('❌ Error closing Publisher connection:', error);
             }
         } else if (pubClient) {
-            console.log('⚠️ Redis Publisher was already closed');
+            log.warn('⚠️ Publisher was already closed');
         }
         
         if (subClient && subClient.isOpen) {
             try {
                 await subClient.quit();
-                console.log('✅ Redis Subscriber connection closed');
+                log.info('✅ Subscriber connection closed');
             } catch (error) {
-                console.error('❌ Error closing Redis Subscriber connection:', error);
+                log.error('❌ Error closing Subscriber connection:', error);
             }
         } else if (subClient) {
-            console.log('⚠️ Redis Subscriber was already closed');
+            log.warn('⚠️ Subscriber was already closed');
         }
     } catch (error) {
-        console.error('❌ Error closing Redis connections:', error);
+        log.error('❌ Error closing Redis connections:', error);
     }
 }; 

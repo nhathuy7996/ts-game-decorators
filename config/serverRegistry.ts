@@ -1,5 +1,8 @@
 import os from 'os';
 import { getRedisClients } from './redis';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('ServerRegistry');
 
 // ─── Server Identity ───────────────────────────────────────────────────────────
 export const SERVER_ID = process.env.SERVER_ID || `${os.hostname()}-${process.pid}`;
@@ -133,16 +136,16 @@ export const startServerRegistry = async () => {
 
     await writeHeartbeat();     // Gửi heartbeat ngay lần đầu
     await refreshCache();       // Khởi tạo cache ngay lần đầu
-    console.log(`📋 Server registered: [${SERVER_ID}] | index: ${_cache.myIndex} / total: ${_cache.count}`);
+    log.info(`📋 Server registered: [${SERVER_ID}] | index: ${_cache.myIndex} / total: ${_cache.count}`);
 
     // Heartbeat + refresh cache định kỳ
     heartbeatTimer = setInterval(async () => {
         try {
             await writeHeartbeat();
             await refreshCache();
-            console.log(`💓 [${SERVER_ID}] Heartbeat | index: ${_cache.myIndex} / total: ${_cache.count}`);
+            log.debug(`💓 Heartbeat | index: ${_cache.myIndex} / total: ${_cache.count}`);
         } catch (err) {
-            console.error('❌ Heartbeat failed:', err);
+            log.error('❌ Heartbeat failed:', err);
         }
     }, HEARTBEAT_INTERVAL_MS);
 };
@@ -198,5 +201,5 @@ export const stopServerRegistry = async () => {
 
     await pubClient.hDel(REGISTRY_KEY, SERVER_ID);
     await pubClient.del(`server:registry:ttl:${SERVER_ID}`);
-    console.log(`📋 Server unregistered: [${SERVER_ID}]`);
+    log.info(`📋 Server unregistered: [${SERVER_ID}]`);
 };
